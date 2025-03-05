@@ -1,0 +1,43 @@
+{
+    "display": {
+        "screen_width": 800,
+        "screen_height": 600,
+        "window_mode": "windowed",
+        "bg_color": [
+            0,
+            0,
+            0
+        ],
+        "fg_color": [
+            255,
+            255,
+            255
+        ]
+    },
+    "font": {
+        "font_size": 30,
+        "font_name": null,
+        "font_color": [
+            255,
+            255,
+            255
+        ],
+        "text_alignment": "left",
+        "text_orientation": "normal"
+    },
+    "scrolling": {
+        "scroll_speed": 1,
+        "scroll_direction": "up"
+    },
+    "toolbar": {
+        "toolbar_visible": true,
+        "toolbar_position": "top"
+    },
+    "shortcuts": {
+        "increase_font_size": "K_PLUS",
+        "decrease_font_size": "K_MINUS",
+        "toggle_horizontal_mirror": "K_h",
+        "toggle_vertical_mirror": "K_v",
+        "toggle_bg_color": "K_b"
+    }
+}

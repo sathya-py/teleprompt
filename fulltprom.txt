@@ -1,0 +1,479 @@
+Path: .\buffer.py
+===========
+import os
+
+class TextBuffer:
+    def __init__(self, file_path, num_visible_lines, preload_above=2, preload_below=2):
+        self.file_path = file_path
+        self.num_visible_lines = num_visible_lines
+        self.preload_above = preload_above
+        self.preload_below = preload_below
+        self.buffer = []
+        self.current_position = 0  # Line index in file
+        self.total_lines = self._count_lines()
+        self.load_initial_buffer()
+
+    def _count_lines(self):
+        """Returns total number of lines in the file."""
+        try:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
+                return sum(1 for _ in f)
+        except FileNotFoundError:
+            return 0
+
+    def load_initial_buffer(self):
+        """Loads the initial set of lines based on the screen size."""
+        self.buffer = self._read_lines(0, self.num_visible_lines + self.preload_below)
+
+    def _read_lines(self, start, count):
+        """Reads 'count' lines from file starting at 'start' index."""
+        lines = []
+        try:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
+                for i, line in enumerate(f):
+                    if i >= start:
+                        lines.append(line.strip())
+                    if len(lines) >= count:
+                        break
+        except FileNotFoundError:
+            pass
+        return lines
+
+    def scroll_down(self):
+        """Scrolls down by one line, loads more if needed."""
+        if self.current_position + self.num_visible_lines < self.total_lines:
+            self.current_position += 1
+            self.buffer = self._read_lines(
+                self.current_position - self.preload_above, 
+                self.num_visible_lines + self.preload_below
+            )
+
+    def scroll_up(self):
+        """Scrolls up by one line, loads more if needed."""
+        if self.current_position > 0:
+            self.current_position -= 1
+            self.buffer = self._read_lines(
+                max(0, self.current_position - self.preload_above), 
+                self.num_visible_lines + self.preload_below
+            )
+
+    def get_visible_lines(self):
+        """Returns the currently buffered lines for display."""
+        return self.buffer
+
+-------------------------------------------------
+
+Path: .\config.py
+===========
+import json
+import os
+
+CONFIG_FILE = "config.json"
+
+# Default configuration settings
+DEFAULT_CONFIG = {
+    "display": {
+        "screen_width": 800,
+        "screen_height": 600,
+        "window_mode": "windowed",
+        "bg_color": [0, 0, 0],
+        "fg_color": [255, 255, 255]
+    },
+    "font": {
+        "font_size": 30,
+        "font_name": None,
+        "font_color": [255, 255, 255],
+        "text_alignment": "left",
+        "text_orientation": "normal"
+    },
+    "scrolling": {
+        "scroll_speed": 1,
+        "scroll_direction": "up"
+    },
+    "toolbar": {
+        "toolbar_visible": True,
+        "toolbar_position": "top"
+    },
+    "shortcuts": {
+        "increase_font_size": "K_PLUS",
+        "decrease_font_size": "K_MINUS",
+        "toggle_horizontal_mirror": "K_h",
+        "toggle_vertical_mirror": "K_v",
+        "toggle_bg_color": "K_b"
+    }
+}
+
+def create_default_config():
+    """Create a new config.json file with default settings if it doesn't exist."""
+    with open(CONFIG_FILE, "w") as file:
+        json.dump(DEFAULT_CONFIG, file, indent=4)
+    print(f"Config file '{CONFIG_FILE}' created with default settings.")
+
+def load_config():
+    """Load configuration from the JSON file. If it doesn't exist, create one first."""
+    if not os.path.exists(CONFIG_FILE):
+        create_default_config()
+    
+    with open(CONFIG_FILE, "r") as file:
+        return json.load(file)
+
+def save_config(config_data):
+    """Save the given configuration data into the JSON file."""
+    with open(CONFIG_FILE, "w") as file:
+        json.dump(config_data, file, indent=4)
+
+def update_config(section, key, value):
+    """Update a specific configuration value and save the changes."""
+    config = load_config()
+    if section in config and key in config[section]:
+        config[section][key] = value
+        save_config(config)
+        print(f"Updated '{key}' in '{section}' to {value}")
+
+# Ensure the config file exists on first run
+if not os.path.exists(CONFIG_FILE):
+    create_default_config()
+
+# Load config at the start
+config = load_config()
+
+-------------------------------------------------
+
+Path: .\file_manager.py
+=================
+
+-------------------------------------------------
+
+Path: .\toolbar.py
+============
+import pygame
+import tkinter as tk
+from tkinter import filedialog, colorchooser
+import config
+import file_manager
+
+# Toolbar Dimensions
+TOOLBAR_HEIGHT = 40
+ICON_SIZE = 24
+PADDING = 10
+
+# Colors
+TOOLBAR_BG = (30, 30, 30)  # Dark Grey
+TEXT_COLOR = (255, 255, 255)  # White
+BUTTON_COLOR = (50, 50, 50)  # Button Background
+HOVER_COLOR = (80, 80, 80)  # Hover Effect
+BORDER_COLOR = (100, 100, 100)  # Separator Line
+
+# Button Configurations
+buttons = [
+    {"label": "aA", "action": "toggle_font"},
+    {"label": "f", "action": "change_font"},
+    {"label": "◄", "action": "align_left"},
+    {"label": "►", "action": "align_right"},
+    {"label": "▲", "action": "align_top"},
+    {"label": "▼", "action": "align_bottom"},
+    {"label": "BG", "action": "change_bg"},
+    {"label": "FG", "action": "change_fg"},
+    {"label": "▪", "action": "minimize"},
+    {"label": "■", "action": "maximize"},
+    {"label": "X", "action": "close"},
+]
+
+class Toolbar:
+    def __init__(self, screen, width):
+        """Initialize the toolbar with button positions and actions."""
+        self.screen = screen
+        self.width = width
+        self.height = TOOLBAR_HEIGHT
+        self.font = pygame.font.Font(None, 20)
+        self.buttons_rects = []
+        self.active_file = "No File Loaded"
+        
+        self.create_buttons()
+        self.title_rect = pygame.Rect(PADDING, 8, width // 3, ICON_SIZE)  # Clickable title area
+    
+    def create_buttons(self):
+        """Calculate button positions and store their rects."""
+        x_offset = self.width - PADDING  # Start from right side
+        self.buttons_rects = []
+        
+        for btn in reversed(buttons):  # Right-aligned buttons
+            btn_surface = self.font.render(btn["label"], True, TEXT_COLOR)
+            btn_width, btn_height = btn_surface.get_size()
+            btn_rect = pygame.Rect(x_offset - btn_width - PADDING, 8, btn_width + 8, ICON_SIZE)
+            x_offset -= (btn_width + PADDING + 10)
+            self.buttons_rects.append((btn_rect, btn["action"]))
+
+    def update_file_name(self, file_name):
+        """Update the displayed filename in the toolbar."""
+        self.active_file = file_name
+
+    def draw(self):
+        """Render the toolbar and its elements."""
+        pygame.draw.rect(self.screen, TOOLBAR_BG, (0, 0, self.width, self.height))
+        pygame.draw.line(self.screen, BORDER_COLOR, (0, self.height), (self.width, self.height), 2)
+
+        # Draw Application Title (Clickable)
+        title_surface = self.font.render(f"T.Prompt - {self.active_file}", True, TEXT_COLOR)
+        self.screen.blit(title_surface, (PADDING, 10))
+
+        # Draw Buttons
+        for btn_rect, action in self.buttons_rects:
+            pygame.draw.rect(self.screen, BUTTON_COLOR, btn_rect, border_radius=5)
+            label_surface = self.font.render(action[0], True, TEXT_COLOR)
+            self.screen.blit(label_surface, (btn_rect.x + 5, btn_rect.y + 5))
+
+    def handle_event(self, event):
+        """Detect button clicks and trigger actions."""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
+            mouse_x, mouse_y = event.pos
+            
+            # File Name Click → Open File Dialog
+            if self.title_rect.collidepoint(mouse_x, mouse_y):
+                self.open_file_dialog()
+                return
+
+            # Button Clicks
+            for btn_rect, action in self.buttons_rects:
+                if btn_rect.collidepoint(mouse_x, mouse_y):
+                    self.execute_action(action)
+
+    def execute_action(self, action):
+        """Perform the respective toolbar action."""
+        if action == "toggle_font":
+            config.toggle_font_size()
+        elif action == "change_font":
+            config.next_font()
+        elif action == "align_left":
+            config.set_alignment("left")
+        elif action == "align_right":
+            config.set_alignment("right")
+        elif action == "align_top":
+            config.set_alignment("top")
+        elif action == "align_bottom":
+            config.set_alignment("bottom")
+        elif action == "change_bg":
+            self.open_color_picker("bg")
+        elif action == "change_fg":
+            self.open_color_picker("fg")
+        elif action == "minimize":
+            pygame.display.iconify()
+        elif action == "maximize":
+            pygame.display.toggle_fullscreen()
+        elif action == "close":
+            pygame.quit()
+            exit()
+
+    def open_file_dialog(self):
+        """Open file dialog to select a file."""
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+
+        file_path = filedialog.askopenfilename(
+            title="Open Teleprompter File",
+            filetypes=[("Prompt Files", "*.prom"), ("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        
+        if file_path:
+            self.update_file_name(file_path.split("/")[-1])
+            file_manager.load_file(file_path)  # Pass file to manager
+
+    def open_color_picker(self, target):
+        """Open color picker for BG/FG selection."""
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+
+        color = colorchooser.askcolor(title=f"Select {target.upper()} Color")[1]  # Get hex color
+        if color:
+            if target == "bg":
+                config.set_background_color(color)
+            elif target == "fg":
+                config.set_foreground_color(color)
+
+-------------------------------------------------
+
+Path: .\tprom.py
+==========
+import pygame
+import sys
+from config import config
+from utils import get_font, draw_text
+from file_manager import file_manager
+from buffer import TextBuffer
+from toolbar import Toolbar
+
+# Initialize pygame
+pygame.init()
+
+# Load user configuration
+SCREEN_WIDTH, SCREEN_HEIGHT = config.get_screen_size()
+BG_COLOR = config.get_bg_color()
+FG_COLOR = config.get_fg_color()
+FONT_SIZE = config.get_font_size()
+SCROLL_SPEED = config.get_scroll_speed()
+
+# Setup screen
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
+pygame.display.set_caption("T.Prompt")
+
+# Initialize modules
+toolbar = Toolbar(screen)
+buffer = TextBuffer(file_manager.current_file, SCREEN_WIDTH, SCREEN_HEIGHT, FONT_SIZE)
+
+def update_display():
+    """Renders text on the screen"""
+    screen.fill(BG_COLOR)  # Background color
+    lines_to_render = buffer.get_visible_lines()
+
+    y_offset = 50  # Start position for text
+    for line in lines_to_render:
+        rendered_text = draw_text(line, get_font(FONT_SIZE), FG_COLOR)
+        screen.blit(rendered_text, (50, y_offset))
+        y_offset += FONT_SIZE + 5
+
+    toolbar.draw()  # Draw the toolbar on top
+    pygame.display.flip()
+
+def handle_keyboard_events(event):
+    """Handles keyboard shortcuts for font size, scrolling, and alignment"""
+    global FONT_SIZE, BG_COLOR, FG_COLOR, SCREEN_WIDTH, SCREEN_HEIGHT
+
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_UP:
+            buffer.scroll_up()
+        elif event.key == pygame.K_DOWN:
+            buffer.scroll_down()
+        elif event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS:
+            FONT_SIZE = min(FONT_SIZE + 2, 120)
+            config.set_font_size(FONT_SIZE)
+        elif event.key == pygame.K_MINUS:
+            FONT_SIZE = max(FONT_SIZE - 2, 6)
+            config.set_font_size(FONT_SIZE)
+        elif event.key == pygame.K_q:
+            pygame.quit()
+            sys.exit()
+
+def main():
+    """Main loop for the teleprompter"""
+    clock = pygame.time.Clock()
+
+    running = True
+    while running:
+        screen.fill(BG_COLOR)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.VIDEORESIZE:
+                SCREEN_WIDTH, SCREEN_HEIGHT = event.w, event.h
+                config.set_screen_size((SCREEN_WIDTH, SCREEN_HEIGHT))
+            else:
+                handle_keyboard_events(event)
+
+        update_display()
+        clock.tick(30)
+
+    pygame.quit()
+    sys.exit()
+
+if __name__ == "__main__":
+    main()
+
+-------------------------------------------------
+
+Path: .\utils.py
+==========
+import pygame
+import os
+import config
+import tkinter as tk
+from tkinter import colorchooser
+
+# Load settings from config
+config = config.load_config()
+
+# Font Cache
+_loaded_fonts = {}
+
+# === COLOR UTILITIES === #
+def open_color_picker(target):
+    """Open color picker for BG/FG selection and update config."""
+    root = tk.Tk()
+    root.withdraw()
+    color = colorchooser.askcolor(title=f"Select {target.upper()} Color")[1]
+    if color:
+        update_colors(bg_color=color if target == "bg" else None,
+                      fg_color=color if target == "fg" else None)
+        save_updated_config()
+
+def update_colors(bg_color=None, fg_color=None):
+    """Update background and foreground colors in config."""
+    if bg_color:
+        config["display"]["bg_color"] = bg_color
+    if fg_color:
+        config["font"]["font_color"] = fg_color
+
+# === FONT UTILITIES === #
+def load_font(size=None, font_name=None):
+    """Loads a font dynamically from assets/fonts/ (supports TTF and OTF)."""
+    size = size or config["font"]["font_size"]
+    font_name = font_name or config["font"]["font_name"]
+    
+    font_dir = os.path.join(os.path.dirname(__file__), "assets", "fonts")
+    font_path = None
+
+    # Check both TTF and OTF variants
+    for ext in [".ttf", ".otf"]:
+        file_path = os.path.join(font_dir, font_name + ext)
+        if os.path.exists(file_path):
+            font_path = file_path
+            break
+
+    if not font_path:
+        print(f"⚠ Font '{font_name}' not found. Using default.")
+        font_path = None  # Use system default
+
+    # Cache the font for performance
+    if (font_path, size) not in _loaded_fonts:
+        _loaded_fonts[(font_path, size)] = pygame.font.Font(font_path, size)
+
+    return _loaded_fonts[(font_path, size)]
+
+def change_font_size(delta):
+    """Increase or decrease font size within allowed limits (6 - 120)."""
+    new_size = max(6, min(120, config["font"]["font_size"] + delta))
+    config["font"]["font_size"] = new_size
+    save_updated_config()
+    return load_font(new_size)
+
+# === TEXT ALIGNMENT UTILITIES === #
+def get_text_position(text_surface, screen_width, screen_height, alignment):
+    """Determines text position based on alignment settings."""
+    text_width, text_height = text_surface.get_size()
+    
+    positions = {
+        "left": (20, screen_height // 2 - text_height // 2),
+        "right": (screen_width - text_width - 20, screen_height // 2 - text_height // 2),
+        "center": ((screen_width - text_width) // 2, screen_height // 2 - text_height // 2)
+    }
+
+    return positions.get(alignment, (20, 20))  # Default fallback
+
+# === MIRRORING UTILITIES === #
+def apply_mirroring(text_surface, mirror_horizontal, mirror_vertical):
+    """Applies mirroring effects based on the settings."""
+    return pygame.transform.flip(text_surface, mirror_horizontal, mirror_vertical) if mirror_horizontal or mirror_vertical else text_surface
+
+# === SCROLLING UTILITIES === #
+def adjust_scroll_speed(delta):
+    """Adjust scrolling speed within reasonable limits (1-10)."""
+    new_speed = max(1, min(10, config["scrolling"]["scroll_speed"] + delta))
+    config["scrolling"]["scroll_speed"] = new_speed
+    save_updated_config()
+
+# === CONFIG UTILITIES === #
+def save_updated_config():
+    """Saves any modified settings back to config.json."""
+    from config import save_config
+    save_config(config)
+
+-------------------------------------------------
