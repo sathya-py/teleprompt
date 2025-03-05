@@ -10,6 +10,33 @@ config = config.load_config()
 # Font Cache
 _loaded_fonts = {}
 
+
+def get_font(size=None, font_name=None):
+    """Load a font dynamically with caching."""
+    if size is None:
+        size = config["font"]["font_size"]
+    if font_name is None:
+        font_name = config["font"]["font_name"] or None  # Use default system font
+
+    font_key = (font_name, size)
+    if font_key not in _loaded_fonts:
+        if font_name:
+            font_path = os.path.join("assets/fonts", font_name)
+            if os.path.exists(font_path):
+                _loaded_fonts[font_key] = pygame.font.Font(font_path, size)
+            else:
+                print(f"⚠ Font '{font_name}' not found. Using default.")
+                _loaded_fonts[font_key] = pygame.font.Font(None, size)
+        else:
+            _loaded_fonts[font_key] = pygame.font.Font(None, size)
+
+    return _loaded_fonts[font_key]
+
+def draw_text(text, font, color):
+    """Render text with anti-aliasing."""
+    return font.render(text, True, color)
+
+
 # === COLOR UTILITIES === #
 def open_color_picker(target):
     """Open color picker for BG/FG selection and update config."""

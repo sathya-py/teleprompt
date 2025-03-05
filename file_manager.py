@@ -21,6 +21,11 @@ class FileManager:
     def get_file_list(self):
         """Return the list of available files."""
         return self.file_list
+    
+    def get_file_name(self):
+        """Return the name of the currently opened file."""
+        return os.path.basename(self.current_file) if self.current_file else "No File Loaded"
+
 
     def open_file_dialog(self):
         """Open file dialog to select a file."""
@@ -35,9 +40,7 @@ class FileManager:
             config.set_last_opened_file(file_path)  # Save to config
         return file_path
 
-    def get_file_name(self):
-        """Return the name of the current file."""
-        return os.path.basename(self.current_file) if self.current_file else "No File Loaded"
+
 
     def read_file_lines(self, start=0, num_lines=10):
         """

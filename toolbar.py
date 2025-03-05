@@ -32,48 +32,39 @@ buttons = [
     {"label": "X", "action": "close"},
 ]
 
-class Toolbar:
 
+class Toolbar:
     def __init__(self, screen, width):
+        """Initialize the toolbar with button positions and actions."""
         self.screen = screen
         self.width = width
         self.height = TOOLBAR_HEIGHT
         self.dragging = False
         self.offset_x, self.offset_y = 0, 0
-        self.font = pygame.font.Font(None, 20)        
-        self.create_buttons()
+        self.font = pygame.font.Font(None, 20)
+        self.active_file = "Promptfile"
+        self.buttons_rects = []  # ✅ Initialize button rectangles
+        self.create_buttons()  # ✅ Ensure this runs after other initializations
         self.title_rect = pygame.Rect(PADDING, 8, width // 3, ICON_SIZE)  # Clickable title area
-    
+
     def create_buttons(self):
         """Calculate button positions and store their rects."""
-        x_offset = self.width - PADDING  # Start from right side
+        x_offset = self.width - PADDING  # ✅ Initialize x_offset before using it
         self.buttons_rects = []
-        
+
         for btn in reversed(buttons):  # Right-aligned buttons
             btn_surface = self.font.render(btn["label"], True, TEXT_COLOR)
             btn_width, btn_height = btn_surface.get_size()
             btn_rect = pygame.Rect(x_offset - btn_width - PADDING, 8, btn_width + 8, ICON_SIZE)
-            x_offset -= (btn_width + PADDING + 10)
+            x_offset -= (btn_width + PADDING + 10)  # ✅ Ensure x_offset is updated
             self.buttons_rects.append((btn_rect, btn["action"]))
+
+
 
     def update_file_name(self, file_name):
         """Update the displayed filename in the toolbar."""
-        self.active_file = file_name
+        self.active_file = file_name or "No File Loaded"
 
-
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if 0 <= event.pos[1] <= self.height:
-                self.dragging = True
-                self.offset_x, self.offset_y = event.pos
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.dragging = False
-        elif event.type == pygame.MOUSEMOTION and self.dragging:
-            pygame.display.set_mode((self.width, self.height), pygame.NOFRAME)
-            x, y = pygame.mouse.get_pos()
-            pygame.display.get_window_surface().get_abs_parent().move(x - self.offset_x, y - self.offset_y)
-            
     def draw(self):
         """Render the toolbar and its elements."""
         pygame.draw.rect(self.screen, TOOLBAR_BG, (0, 0, self.width, self.height))
@@ -88,7 +79,26 @@ class Toolbar:
             pygame.draw.rect(self.screen, BUTTON_COLOR, btn_rect, border_radius=5)
             label_surface = self.font.render(action[0], True, TEXT_COLOR)
             self.screen.blit(label_surface, (btn_rect.x + 5, btn_rect.y + 5))
+        
+        for btn in reversed(buttons):  # Right-aligned buttons
+            btn_surface = self.font.render(btn["label"], True, TEXT_COLOR)
+            btn_width, btn_height = btn_surface.get_size()
+            btn_rect = pygame.Rect(x_offset - btn_width - PADDING, 8, btn_width + 8, ICON_SIZE)
+            x_offset -= (btn_width + PADDING + 10)
+            self.buttons_rects.append((btn_rect, btn["action"]))
 
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if 0 <= event.pos[1] <= self.height:
+                self.dragging = True
+                self.offset_x, self.offset_y = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            pygame.display.set_mode((self.width, self.height), pygame.NOFRAME)
+            x, y = pygame.mouse.get_pos()
+            pygame.display.get_window_surface().get_abs_parent().move(x - self.offset_x, y - self.offset_y)
+            
 
     def execute_action(self, action):
         """Perform the respective toolbar action."""
