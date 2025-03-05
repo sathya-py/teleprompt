@@ -5,9 +5,10 @@ import config
 import file_manager
 
 # Toolbar Dimensions
-TOOLBAR_HEIGHT = 40
 ICON_SIZE = 24
 PADDING = 10
+TOOLBAR_HEIGHT = 40
+TOOLBAR_BG = (30, 30, 30)
 
 # Colors
 TOOLBAR_BG = (30, 30, 30)  # Dark Grey
@@ -32,15 +33,14 @@ buttons = [
 ]
 
 class Toolbar:
+
     def __init__(self, screen, width):
-        """Initialize the toolbar with button positions and actions."""
         self.screen = screen
         self.width = width
         self.height = TOOLBAR_HEIGHT
-        self.font = pygame.font.Font(None, 20)
-        self.buttons_rects = []
-        self.active_file = "No File Loaded"
-        
+        self.dragging = False
+        self.offset_x, self.offset_y = 0, 0
+        self.font = pygame.font.Font(None, 20)        
         self.create_buttons()
         self.title_rect = pygame.Rect(PADDING, 8, width // 3, ICON_SIZE)  # Clickable title area
     
@@ -60,6 +60,20 @@ class Toolbar:
         """Update the displayed filename in the toolbar."""
         self.active_file = file_name
 
+
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if 0 <= event.pos[1] <= self.height:
+                self.dragging = True
+                self.offset_x, self.offset_y = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            pygame.display.set_mode((self.width, self.height), pygame.NOFRAME)
+            x, y = pygame.mouse.get_pos()
+            pygame.display.get_window_surface().get_abs_parent().move(x - self.offset_x, y - self.offset_y)
+            
     def draw(self):
         """Render the toolbar and its elements."""
         pygame.draw.rect(self.screen, TOOLBAR_BG, (0, 0, self.width, self.height))
@@ -75,20 +89,6 @@ class Toolbar:
             label_surface = self.font.render(action[0], True, TEXT_COLOR)
             self.screen.blit(label_surface, (btn_rect.x + 5, btn_rect.y + 5))
 
-    def handle_event(self, event):
-        """Detect button clicks and trigger actions."""
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-            mouse_x, mouse_y = event.pos
-            
-            # File Name Click → Open File Dialog
-            if self.title_rect.collidepoint(mouse_x, mouse_y):
-                self.open_file_dialog()
-                return
-
-            # Button Clicks
-            for btn_rect, action in self.buttons_rects:
-                if btn_rect.collidepoint(mouse_x, mouse_y):
-                    self.execute_action(action)
 
     def execute_action(self, action):
         """Perform the respective toolbar action."""
@@ -141,3 +141,5 @@ class Toolbar:
                 config.set_background_color(color)
             elif target == "fg":
                 config.set_foreground_color(color)
+
+
